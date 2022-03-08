@@ -11,6 +11,8 @@ const Queue = [];
 
 async function get_comments(youtubeLink, youtubeId) {
   const browser = await puppeteer.launch({
+    defaultViewport: null,
+    slowMo:10,
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
