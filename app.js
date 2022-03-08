@@ -36,16 +36,16 @@ server.get("/retrieve-comments", async (req, res, next) => {
   }
 });
 
-server.get("/get-comments", async (req, res, next) => {
-  if (!req.query.id) {
+server.post("/get-comments", async (req, res, next) => {
+  if (!req.body.id) {
     return next(new httpError("Provide a valid id", 400));
   }
   // let's check if same youtube is still getting extracted
   let youtube_exists = false;
   try {
-    youtube_exists = await youtube.findOne({ id: req.query.id });
+    youtube_exists = await youtube.findOne({ id: req.body.id });
   } catch (err) {
-    console.log(err, "WHILE EXTRACTING ONE YOUTUBE", req.query.id);
+    console.log(err, "WHILE EXTRACTING ONE YOUTUBE", req.body.id);
     return next(new httpError("SOMETHING WENT WRONG.TRY AGAIN", 500));
   }
 
@@ -64,9 +64,10 @@ server.get("/get-comments", async (req, res, next) => {
 
   // if reached here means we need to create a new youtube instance
   youtube_exists = youtube({
-    id: req.query.id,
+    id: req.body.id,
     status: "processing",
     comments: [],
+    email:req.body.email
   });
 
   try {
@@ -83,8 +84,8 @@ server.get("/get-comments", async (req, res, next) => {
 
   // if reached here a new youtube instance is created
   // now can run the get-comments script
-  let youtube_link = `https://www.youtube.com/watch?v=${req.query.id}`;
-  get_comments(youtube_link, req.query.id);
+  let youtube_link = `https://www.youtube.com/watch?v=${req.body.id}`;
+  get_comments(youtube_link, req.body.id);
 
   res.status(200).json({
     data: youtube_exists,

@@ -11,7 +11,8 @@ const youtube = new Schema({
     status:String,
     title:String,
     description:String,
-    transcript:String
+    transcript:String,
+    email:String
 
 },{timestamps:true})
 
