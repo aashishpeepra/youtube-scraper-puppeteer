@@ -5,6 +5,7 @@ const { base } = require("./airtable.config");
 const httpError = require("./model/http-error");
 const mongoose = require("mongoose");
 const youtube = require("./model/youtube");
+const get_meta_info = require("./functions/get-metadata");
 
 const server = express();
 dotenv.config();
@@ -67,7 +68,7 @@ server.post("/get-comments", async (req, res, next) => {
     id: req.body.id,
     status: "processing",
     comments: [],
-    email:req.body.email
+    email: req.body.email,
   });
 
   try {
@@ -92,6 +93,34 @@ server.post("/get-comments", async (req, res, next) => {
     success: true,
     message: "Started scraping data",
   });
+
+  let meta_data = false;
+  try {
+    meta_data = await get_meta_info(req.body.id);
+  } catch (err) {
+    console.error("Error while extracting meta data for", req.body.id, err);
+  }
+  if (!meta_data) {
+    // maybe update the info in the DB that while processing meta data some error occured
+    youtube_exists.meta_processing = "failed";
+   
+  } else {
+    // reached here means we have meta data inside meta_data variable
+    youtube_exists.title = meta_data.meta_data.title;
+    youtube_exists.views = parseInt(meta_data.meta_data.views);
+    youtube_exists.description = meta_data.meta_data.description;
+    youtube_exists.date = meta_data.meta_data.date;
+    youtube_exists.channel_name = meta_data.meta_data.channel_name;
+    youtube_exists.transcript = meta_data.transcript;
+    youtube_exists.meta_processing = "done"
+  }
+
+  try {
+    await youtube_exists.save();
+  } catch (err) {
+    console.error("ERROR WHILE TRYING TO SAVE THE YOUTUBE META DATA", err);
+    return;
+  }
 });
 
 // server.use("/get-comments", async (req, res, next) => {

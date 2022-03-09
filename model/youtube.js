@@ -12,7 +12,15 @@ const youtube = new Schema({
     title:String,
     description:String,
     transcript:String,
-    email:String
+    email:String,
+    date:String,
+    channel_name:String,
+    transcript:String,
+    views:Number,
+    meta_processing:{
+        type:String,
+        default:"pending"
+    }
 
 },{timestamps:true})
 
