@@ -1,7 +1,7 @@
 const express = require("express");
 const { get_comments } = require("./youtube");
 const dotenv = require("dotenv");
-const { base } = require("./airtable.config");
+const cors = require("cors");
 const httpError = require("./model/http-error");
 const mongoose = require("mongoose");
 const youtube = require("./model/youtube");
@@ -11,7 +11,7 @@ const server = express();
 dotenv.config();
 server.use(express.json());
 server.use(express.urlencoded({ extended: true }));
-
+server.use(cors())
 const PORT = process.env.PORT || 5000;
 
 server.get("/retrieve-comments", async (req, res, next) => {
