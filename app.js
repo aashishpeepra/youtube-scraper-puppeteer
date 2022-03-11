@@ -6,12 +6,17 @@ const httpError = require("./model/http-error");
 const mongoose = require("mongoose");
 const youtube = require("./model/youtube");
 const get_meta_info = require("./functions/get-metadata");
+const puppeteer = require("puppeteer");
+const Queue = require("./helpers/Queue");
+
+var browser; // This is the global reference for the Chromium puppeteer browser
+var localQueue;
 
 const server = express();
 dotenv.config();
 server.use(express.json());
 server.use(express.urlencoded({ extended: true }));
-server.use(cors())
+server.use(cors());
 const PORT = process.env.PORT || 5000;
 
 server.get("/retrieve-comments", async (req, res, next) => {
@@ -33,6 +38,38 @@ server.get("/retrieve-comments", async (req, res, next) => {
     res.status(200).json({
       data: youtube_exists,
       message: "Here's the data for the youtube id " + req.query.id,
+    });
+  }
+});
+
+server.get("/restart-browser", async (req, res, next) => {
+  if (req.query.password === "123") {
+    // just a temp password so simple get request doesn't kill the browser
+    try {
+      browser = await puppeteer.launch({
+        defaultViewport: null,
+        slowMo: 10,
+        headless: false,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+    } catch (err) {
+      console.error(err, "WHILE RESTARTING THE BROWSER");
+    }
+    if (!browser) {
+      res.status(500).json({
+        message: "failed in restarting the browser. check logs",
+        status: false,
+      });
+    } else {
+      res.status(200).json({
+        message: "restarted the brwoser",
+        status: true,
+      });
+    }
+  } else {
+    res.status(403).json({
+      message: "Incorrest request. Send the password",
+      status: false,
     });
   }
 });
@@ -86,7 +123,6 @@ server.post("/get-comments", async (req, res, next) => {
   // if reached here a new youtube instance is created
   // now can run the get-comments script
   let youtube_link = `https://www.youtube.com/watch?v=${req.body.id}`;
-  get_comments(youtube_link, req.body.id);
 
   res.status(200).json({
     data: youtube_exists,
@@ -94,6 +130,14 @@ server.post("/get-comments", async (req, res, next) => {
     message: "Started scraping data",
   });
 
+  // this is the place where I push a new page into the browser , instead I'll now push it into the queue
+  // get_comments(browser,youtube_link, req.body.id);
+
+  // adding the request into the queue
+  localQueue.add_next({
+    id: req.body.id,
+    time: new Date().getTime().toString(),
+  });
   let meta_data = false;
   try {
     meta_data = await get_meta_info(req.body.id);
@@ -103,7 +147,6 @@ server.post("/get-comments", async (req, res, next) => {
   if (!meta_data) {
     // maybe update the info in the DB that while processing meta data some error occured
     youtube_exists.meta_processing = "failed";
-   
   } else {
     // reached here means we have meta data inside meta_data variable
     youtube_exists.title = meta_data.meta_data.title;
@@ -112,7 +155,7 @@ server.post("/get-comments", async (req, res, next) => {
     youtube_exists.date = meta_data.meta_data.date;
     youtube_exists.channel_name = meta_data.meta_data.channel_name;
     youtube_exists.transcript = meta_data.transcript;
-    youtube_exists.meta_processing = "done"
+    youtube_exists.meta_processing = "done";
   }
 
   try {
@@ -208,13 +251,32 @@ server.post("/get-comments", async (req, res, next) => {
 //     id: req.query.id,
 //   });
 // });
-
+async function wasBrowserKilled(browser) {
+  const procInfo = await browser.process();
+  return !!procInfo.signalCode; // null if browser is still running
+}
 mongoose
   .connect(process.env.MONGO_URL, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then(() => {
+  .then(async () => {
+    // initializing the browser as soon as the server is live
+    if (!browser || wasBrowserKilled(browser)) {
+      try {
+        browser = await puppeteer.launch({
+          defaultViewport: null,
+          slowMo: 10,
+          headless: false,
+          args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+      } catch (err) {
+        console.error(err, "WHILE TRYING TO START THE BROWSER");
+      }
+    }
+
+    localQueue = new Queue("localQueue.json", browser);
+    await localQueue.start_initialization();
     console.log("CONNECTED TO MONGODB");
     server.listen(PORT, () => {
       console.log(`STARTED LISTENING ON PORT ${PORT} @ ${new Date()} `);

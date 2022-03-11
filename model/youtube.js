@@ -20,7 +20,8 @@ const youtube = new Schema({
     meta_processing:{
         type:String,
         default:"pending"
-    }
+    },
+    total_comments:Number
 
 },{timestamps:true})
 

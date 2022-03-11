@@ -9,16 +9,49 @@ const { base } = require("./airtable.config");
 
 const Queue = [];
 
-async function get_comments(youtubeLink, youtubeId) {
-  const browser = await puppeteer.launch({
-    defaultViewport: null,
-    slowMo:10,
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-  console.log(youtubeId);
-  const page = await browser.newPage();
-  await page.goto(youtubeLink);
+async function get_comments(browser, youtubeLink, youtubeId,finish_processing) {
+  // if (!browser) {
+  //   console.error("ERROR IN THE PASSED BROWSER", browser);
+  //   try {
+  //     await youtube.findOneAndUpdate(
+  //       {
+  //         id: youtubeId,
+  //       },
+  //       {
+  //         status: "failed",
+  //       }
+  //     );
+  //   } catch (err) {
+  //     console.error(err);
+  //   }
+  //   finish_processing()
+  //   return;
+  // }
+  console.log("STARTING THE SCRAPER FOR => ", youtubeId, youtubeLink);
+  let page = false;
+  try{
+    page = await browser.newPage();
+  
+  }catch(err){
+    console.error("WHILE INITIALIZING A NEW PAGE",err);
+    finish_processing();
+  }
+  // await page.setRequestInterception(true);
+  // page.on("request", (req) => {
+  //   if (req.resourceType() == "image" || req.resourceType() == "font") {
+  //     req.abort();
+  //   } else {
+  //     req.continue();
+  //   }
+  // });
+  try{
+    await page.goto(youtubeLink);
+  }catch(err){
+    console.error(err);
+    finish_processing()
+  }
+  
+  
   var security = 0;
   // var interval = setInterval(() => {
   //   if(Queue.length == 0){
@@ -64,7 +97,7 @@ async function get_comments(youtubeLink, youtubeId) {
     await page.waitForSelector("yt-visibility-monitor#visibility-monitor", {
       timeout: 60000,
     });
-    await page.waitFor(1500); // time to breathe
+    await page.waitFor(2500); // time to breathe
     await console.log("video is in view!");
 
     // count the amount of youtube comments
@@ -84,8 +117,17 @@ async function get_comments(youtubeLink, youtubeId) {
       (num) => num.innerText,
       commentNumHandle
     );
-    console.log(commentNumber);
-
+    console.log(commentNumber); // total number of comments in this video
+    try {
+      await youtube.findOneAndUpdate(
+        { id: youtubeId },
+        {
+          total_comments: parseInt(commentNumber.split(" ")[0]),
+        }
+      );
+    } catch (err) {
+      console.error(err, "WHILE UPDATING THE TOTAL NUMBER OF COMMENTS");
+    }
     await page.waitFor(1500);
     var comments = true;
     let data = {};
@@ -93,12 +135,15 @@ async function get_comments(youtubeLink, youtubeId) {
     let false_alarm = 0;
     while (comments) {
       let new_length = Object.keys(data).length;
-      console.log(previous_length, new_length, false_alarm);
+      // console.log(previous_length, new_length, false_alarm);
       if (new_length == previous_length && previous_length != 0) {
         false_alarm++;
       } else {
         previous_length = new_length;
         false_alarm = 0;
+      }
+      if(new_length>600){
+        break;
       }
       if (false_alarm > 250) {
         break;
@@ -125,11 +170,11 @@ async function get_comments(youtubeLink, youtubeId) {
                 }
               );
             } catch (err) {
-              console.log(err, "while trying to enter comment into the DB");
+              console.error(err, "while trying to enter comment into the DB");
             }
-            console.log(val);
+            // console.log(val);
           } catch {
-            console.log(val, "is an error");
+            console.error(val, "is an error");
           }
 
           // console.log(val);
@@ -203,8 +248,9 @@ async function get_comments(youtubeLink, youtubeId) {
     //     },
     //   },
     // ]);
-    page.close();
-    browser.close();
+    await page.close();
+    finish_processing()
+    // browser.close();
     return;
   }
 
@@ -232,8 +278,9 @@ async function get_comments(youtubeLink, youtubeId) {
   }
 
   // now everything is done so can succesfully close all running tasks
-  page.close();
-  browser.close();
+  await page.close();
+  finish_processing()
+  // browser.close();
 }
 
 // get_comments(
